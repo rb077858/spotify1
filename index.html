@@ -2,87 +2,161 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>Spotify Visualizer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Origami Art</title>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; text-align: center; padding: 50px; }
-        .card { background: #181818; padding: 30px; border-radius: 20px; display: inline-block; }
-        button { background: #1DB954; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-size: 16px; margin: 10px; }
-        #image-result { width: 400px; border-radius: 10px; margin-top: 20px; display: none; }
+        body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; text-align: center; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: #181818; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .spotify-green { color: #1DB954; }
+        button { background: #1DB954; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-weight: bold; font-size: 16px; margin: 20px 0; transition: 0.3s; }
+        button:hover { transform: scale(1.05); background: #1ed760; }
+        select { background: #282828; color: white; border: 1px solid #333; padding: 10px; border-radius: 10px; width: 100%; margin: 10px 0; }
+        #image-result { width: 100%; border-radius: 15px; margin-top: 20px; display: none; box-shadow: 0 0 20px rgba(29, 185, 84, 0.3); }
+        .loader { display: none; color: #1DB954; margin: 20px 0; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h1>🎨 Spotify Origami Art</h1>
-    
+<div class="container">
+    <h1 class="spotify-green">🎨 Spotify Origami AI</h1>
+    <p>יוצר אמנות מהשירים האחרונים שלך</p>
+
     <div id="login-section">
-        <button id="login-btn">התחבר לספוטיפיי</button>
+        <button id="btn-login">התחבר עם Spotify</button>
     </div>
 
     <div id="app-section" style="display:none;">
+        <label>בחר טווח זמן לניתוח:</label>
         <select id="time-range">
             <option value="short_term">חודש אחרון</option>
+            <option value="medium_term">חצי שנה אחרונה</option>
             <option value="long_term">כל הזמן</option>
         </select>
-        <button id="generate-btn">צור תמונת אוריגמי</button>
+        <button id="btn-generate">צור יצירת אמנות ✨</button>
     </div>
 
-    <div id="loader" style="display:none;">מייצר קסם... ✨</div>
-    <img id="image-result" src="" alt="Result">
+    <div id="loader" class="loader">מעבד נתונים ויוצר קסם... ✨</div>
+    <img id="image-result" src="" alt="Musical Origami Art">
 </div>
 
 <script type="module">
     import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
 
-    const CLIENT_ID = '5dc58d7ce97b4cb7841eb81f8aed9fa7'; // שים כאן את ה-ID שלך
-    const GEMINI_KEY = 'AIzaSyBjL-loTU38OiYjvrJQSr_TkcvzJAdF9Ek'; // שים כאן את המפתח שלך
+    // --- הגדרות - שנה כאן! ---
+    const clientId = '5dc58d7ce97b4cb7841eb81f8aed9fa7'; 
+    const geminiKey = 'AIzaSyBjL-loTU38OiYjvrJQSr_TkcvzJAdF9Ek';
+    const redirectUri = window.location.origin + window.location.pathname;
 
-    // בדיקת טוקן
-    const params = new URLSearchParams(window.location.hash.substring(1));
-    let accessToken = params.get('access_token');
+    // --- פונקציות עזר ל-PKCE (החלק שספוטיפיי דורשת) ---
+    const generateRandomString = (length) => {
+        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        const values = crypto.getRandomValues(new Uint8Array(length));
+        return Array.from(values).map((x) => possible[x % possible.length]).join('');
+    };
 
-    if (accessToken) {
+    const sha256 = async (plain) => {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(plain);
+        return window.crypto.subtle.digest('SHA-256', data);
+    };
+
+    const base64encode = (input) => {
+        return btoa(String.fromCharCode(...new Uint8Array(input)))
+            .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    };
+
+    // --- לוגיקת התחברות ---
+    document.getElementById('btn-login').onclick = async () => {
+        const codeVerifier = generateRandomString(64);
+        const hashed = await sha256(codeVerifier);
+        const codeChallenge = base64encode(hashed);
+
+        window.localStorage.setItem('code_verifier', codeVerifier);
+
+        const params = new URLSearchParams({
+            response_type: 'code',
+            client_id: clientId,
+            scope: 'user-top-read',
+            code_challenge_method: 'S256',
+            code_challenge: codeChallenge,
+            redirect_uri: redirectUri,
+        });
+
+        window.location.href = `http://googleusercontent.com/spotify.com/4{params.toString()}`;
+    };
+
+    // --- טיפול בחזרה מספוטיפיי (קבלת הטוקן) ---
+    const urlParams = new URLSearchParams(window.location.search);
+    let code = urlParams.get('code');
+
+    if (code) {
+        const codeVerifier = window.localStorage.getItem('code_verifier');
+        const payload = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                client_id: clientId,
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: redirectUri,
+                code_verifier: codeVerifier,
+            }),
+        };
+
+        const body = await fetch('http://googleusercontent.com/spotify.com/5', payload);
+        const response = await body.json();
+        
+        if (response.access_token) {
+            window.localStorage.setItem('access_token', response.access_token);
+            window.history.replaceState({}, document.title, window.location.pathname); // ניקוי ה-URL
+            showApp();
+        }
+    } else if (window.localStorage.getItem('access_token')) {
+        showApp();
+    }
+
+    function showApp() {
         document.getElementById('login-section').style.display = 'none';
         document.getElementById('app-section').style.display = 'block';
     }
 
-    // חיבור כפתור לוגין
-    document.getElementById('login-btn').onclick = () => {
-        const url = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}&scope=user-top-read`;
-        window.location.href = url;
-    };
-
-    // חיבור כפתור יצירה
-    document.getElementById('generate-btn').onclick = async () => {
+    // --- יצירת התמונה ---
+    document.getElementById('btn-generate').onclick = async () => {
         const loader = document.getElementById('loader');
-        const img = document.getElementById('image-result');
+        const imgDisplay = document.getElementById('image-result');
+        const token = window.localStorage.getItem('access_token');
+        
         loader.style.display = 'block';
+        imgDisplay.style.display = 'none';
 
         try {
-            // 1. קבלת שירים
+            // 1. שליפת שירים
             const range = document.getElementById('time-range').value;
-            const res = await fetch(`https://api.spotify.com/v1/me/top/tracks?time_range=${range}&limit=5`, {
-                headers: { 'Authorization': 'Bearer ' + accessToken }
+            const spotRes = await fetch(`http://googleusercontent.com/spotify.com/6{range}&limit=10`, {
+                headers: { 'Authorization': 'Bearer ' + token }
             });
-            const data = await res.json();
-            const musicText = data.items.map(t => t.name).join(", ");
+            const musicData = await spotRes.json();
+            const songList = musicData.items.map(t => `${t.name} (${t.artists[0].name})`).join(", ");
 
-            // 2. יצירת פרומפט עם Gemini
-            const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+            // 2. יצירת תיאור ב-Gemini
+            const genAI = new GoogleGenerativeAI(geminiKey);
             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-            const prompt = `Describe a single, artistic origami paper-folding scene inspired by: ${musicText}. No text, no letters. High quality.`;
+            const prompt = `Based on these songs: ${songList}. Create a short, highly descriptive visual prompt for an AI image generator. The style must be "Detailed Japanese Origami Paper Art". NO TEXT, NO LETTERS. Focus on colors and paper folds.`;
             
             const result = await model.generateContent(prompt);
             const visualPrompt = result.response.text();
 
-            // 3. יצירת תמונה עם Pollinations (חינם וללא מפתח!)
-            const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt + " origami style, paper art, 3d render")}?width=512&height=512&nologo=true`;
+            // 3. יצירת תמונה (Pollinations - ללא צורך במפתח)
+            const finalImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt + " origami paper art style, high resolution, 3d shadows")}?width=600&height=600&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
             
-            img.src = imageUrl;
-            img.style.display = 'block';
-        } catch (e) {
-            alert("שגיאה! וודא שהמפתחות תקינים.");
-        } finally {
+            imgDisplay.src = finalImageUrl;
+            imgDisplay.onload = () => {
+                loader.style.display = 'none';
+                imgDisplay.style.display = 'block';
+            };
+        } catch (err) {
+            console.error(err);
+            alert("חלה שגיאה. ייתכן שהטוקן פג תוקף, נסה להתחבר מחדש.");
             loader.style.display = 'none';
         }
     };
