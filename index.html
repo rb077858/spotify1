@@ -82,7 +82,8 @@
             redirect_uri: redirectUri,
         });
 
-        window.location.href = `http://googleusercontent.com/spotify.com/4{params.toString()}`;
+        // הכתובת הנכונה של ספוטיפיי:
+window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
     };
 
     // --- טיפול בחזרה מספוטיפיי (קבלת הטוקן) ---
