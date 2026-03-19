@@ -2,110 +2,91 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spotify Visualizer</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-        .card { background: #181818; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 90%; max-width: 500px; text-align: center; }
-        .spotify-green { color: #1DB954; }
-        button { background: #1DB954; color: white; border: none; padding: 12px 25px; border-radius: 25px; cursor: pointer; font-weight: bold; transition: 0.3s; margin: 10px; }
-        button:hover { transform: scale(1.05); background: #1ed760; }
-        select { background: #282828; color: white; border: 1px solid #333; padding: 10px; border-radius: 10px; margin: 15px 0; width: 100%; }
-        #image-result { width: 100%; border-radius: 15px; margin-top: 20px; display: none; border: 2px solid #333; }
-        .loader { display: none; margin-top: 20px; }
+        body { font-family: sans-serif; background: #121212; color: white; text-align: center; padding: 50px; }
+        .card { background: #181818; padding: 30px; border-radius: 20px; display: inline-block; }
+        button { background: #1DB954; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-size: 16px; margin: 10px; }
+        #image-result { width: 400px; border-radius: 10px; margin-top: 20px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1 class="spotify-green">🎨 Spotify <span style="color:white">to</span> Art</h1>
-    <p>הפוך את המוזיקה שלך ליצירת אוריגמי</p>
-
+    <h1>🎨 Spotify Origami Art</h1>
+    
     <div id="login-section">
-        <button onclick="loginWithSpotify()">התחבר עם Spotify</button>
+        <button id="login-btn">התחבר לספוטיפיי</button>
     </div>
 
     <div id="app-section" style="display:none;">
-        <label for="time-range">בחר תקופה:</label>
         <select id="time-range">
-            <option value="short_term">החודש האחרון</option>
-            <option value="medium_term">חצי שנה אחרונה</option>
+            <option value="short_term">חודש אחרון</option>
             <option value="long_term">כל הזמן</option>
         </select>
-        <button onclick="startProcess()">צור תמונה ב-Gemini</button>
+        <button id="generate-btn">צור תמונת אוריגמי</button>
     </div>
 
-    <div id="loader" class="loader">
-        <p>מנתח את הטעם שלך... 🎧</p>
-        <small>(זה לוקח כמה שניות)</small>
-    </div>
-
-    <img id="image-result" src="" alt="Your Musical Mood">
+    <div id="loader" style="display:none;">מייצר קסם... ✨</div>
+    <img id="image-result" src="" alt="Result">
 </div>
 
 <script type="module">
-    // ייבוא Gemini
     import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
 
-    const SPOTIFY_CLIENT_ID = '5dc58d7ce97b4cb7841eb81f8aed9fa7; // הכנס כאן את ה-ID מספוטיפיי
-    const GEMINI_API_KEY = 'AIzaSyBjL-loTU38OiYjvrJQSr_TkcvzJAdF9Ek'; // הכנס כאן את המפתח שלך (או השאר ריק אם תרצה לבקש מהמשתמש)
-    
-    const REDIRECT_URI = window.location.origin + window.location.pathname;
+    const CLIENT_ID = '5dc58d7ce97b4cb7841eb81f8aed9fa7'; // שים כאן את ה-ID שלך
+    const GEMINI_KEY = 'AIzaSyBjL-loTU38OiYjvrJQSr_TkcvzJAdF9Ek'; // שים כאן את המפתח שלך
 
-    // ניהול טוקן ספוטיפיי
+    // בדיקת טוקן
     const params = new URLSearchParams(window.location.hash.substring(1));
     let accessToken = params.get('access_token');
 
     if (accessToken) {
         document.getElementById('login-section').style.display = 'none';
         document.getElementById('app-section').style.display = 'block';
-        window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    window.loginWithSpotify = () => {
-        const scope = 'user-top-read';
-        window.location.href = `http://googleusercontent.com/spotify.com/3{SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${scope}`;
+    // חיבור כפתור לוגין
+    document.getElementById('login-btn').onclick = () => {
+        const url = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}&scope=user-top-read`;
+        window.location.href = url;
     };
 
-    window.startProcess = async () => {
+    // חיבור כפתור יצירה
+    document.getElementById('generate-btn').onclick = async () => {
         const loader = document.getElementById('loader');
-        const imgDisplay = document.getElementById('image-result');
+        const img = document.getElementById('image-result');
         loader.style.display = 'block';
-        imgDisplay.style.display = 'none';
 
         try {
-            // 1. משוך שירים מספוטיפיי
-            const timeRange = document.getElementById('time-range').value;
-            const res = await fetch(`http://googleusercontent.com/spotify.com/4{timeRange}&limit=10`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+            // 1. קבלת שירים
+            const range = document.getElementById('time-range').value;
+            const res = await fetch(`https://api.spotify.com/v1/me/top/tracks?time_range=${range}&limit=5`, {
+                headers: { 'Authorization': 'Bearer ' + accessToken }
             });
             const data = await res.json();
-            const musicData = data.items.map(t => `${t.name} (${t.artists[0].name})`).join(", ");
+            const musicText = data.items.map(t => t.name).join(", ");
 
-            // 2. הפעל את Gemini
-            const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+            // 2. יצירת פרומפט עם Gemini
+            const genAI = new GoogleGenerativeAI(GEMINI_KEY);
             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-            const prompt = `Based on these songs: ${musicData}. 
-            Describe a beautiful, complex origami/paper-folding art scene that represents the mood of this music. 
-            The description should be purely visual, artistic, and abstract. 
-            NO TEXT OR LETTERS.`;
-
+            const prompt = `Describe a single, artistic origami paper-folding scene inspired by: ${musicText}. No text, no letters. High quality.`;
+            
             const result = await model.generateContent(prompt);
             const visualPrompt = result.response.text();
 
-            // 3. כאן בשלב הבא נחבר את Imagen ליצירת התמונה
-            // בינתיים נדפיס לקונסול את התיאור שנוצר
-            console.log("Visual Prompt:", visualPrompt);
-            alert("Gemini יצר תיאור! עכשיו צריך לחבר את שלב יצירת התמונה הסופי.");
+            // 3. יצירת תמונה עם Pollinations (חינם וללא מפתח!)
+            const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt + " origami style, paper art, 3d render")}?width=512&height=512&nologo=true`;
             
-        } catch (err) {
-            console.error(err);
-            alert("שגיאה. וודא שהמפתחות תקינים.");
+            img.src = imageUrl;
+            img.style.display = 'block';
+        } catch (e) {
+            alert("שגיאה! וודא שהמפתחות תקינים.");
         } finally {
             loader.style.display = 'none';
         }
     };
 </script>
+
 </body>
 </html>
